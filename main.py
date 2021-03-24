@@ -171,6 +171,57 @@ model.compile(
 )
 # model.summary()
 
+# callback
+from keras.callbacks import EarlyStopping, ModelCheckpoint, Callback
+from sklearn.metrics import f1_score
+import numpy as np
+class Evaluator(Callback):
+    def __init__(self):
+        super().__init__()
+        self.best_val_f1 = 0
+    def evaluate(self):
+        y_true, y_pred = list(), list()
+        for x, y in valid_generator:
+            y_true.append(y)
+            y_pred.append(self.model.predict(x).argmax(axis=1))
+        y_true = np.concatenate(y_true)
+        y_pred = np.concatenate(y_pred)
+        f1 = f1_score(y_true, y_pred, average="macro")
+        return f1
+    def on_epoch_end(self, epoch, logs=None):
+        val_f1 = self.evaluate()
+        if val_f1>self.best_val_f1:
+            self.best_val_f1 = val_f1
+        logs["val_f1"] = val_f1
+        print(f"val_f1:{val_f1:.5f}, best_val_f1:{self.best_val_f1:.5f}")
+
+callbacks = [
+    Evaluator(),
+    EarlyStopping(
+        monitor = "val_loss",
+        patience = 1,
+        verbose = 1
+    ),
+    ModelCheckpoint(
+        "textcnn_best_model.weights",
+        monitor="val_f1",
+        save_weights_only=True,
+        save_best_only=True,
+        verbose=1,
+        mode="max"
+    ),
+]
+
+model.fit_generator(
+    train_generator.forfit(),
+    steps_per_epoch=len(train_generator),
+    epochs=epochs,
+    callbacks=callbacks,
+    validation_data=valid_generator.forfit(),
+    validation_steps=len(valid_generator)
+)
+
+
 # 训练
 # model.load_weights("best_model.weights")
 model.fit_generator(
